@@ -563,15 +563,20 @@
     [self.commandDelegate sendPluginResult:commandResult callbackId:command.callbackId];
 }
 
+CDVInvokedUrlCommand *hasPermissionCommand;
+
 - (void)hasPermission:(CDVInvokedUrlCommand *)command
 {
+    hasPermissionCommand = command;
     id<UIApplicationDelegate> appDelegate = [UIApplication sharedApplication].delegate;
     if ([appDelegate respondsToSelector:@selector(checkUserHasRemoteNotificationsEnabledWithCompletionHandler:)]) {
         [appDelegate performSelector:@selector(checkUserHasRemoteNotificationsEnabledWithCompletionHandler:) withObject:^(BOOL isEnabled) {
             NSMutableDictionary* message = [NSMutableDictionary dictionaryWithCapacity:1];
             [message setObject:[NSNumber numberWithBool:isEnabled] forKey:@"isEnabled"];
-            CDVPluginResult *commandResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:message];
-            [self.commandDelegate sendPluginResult:commandResult callbackId:command.callbackId];
+            if (notificationDialogHandle) {
+              CDVPluginResult *commandResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:message];
+              [self.commandDelegate sendPluginResult:commandResult callbackId:command.callbackId];
+            }
         }];
     }
 }
@@ -675,6 +680,8 @@
     [self handleNotificationSettingsWithAuthorizationOptions:nil];
 }
 
+BOOL notificationHandle = false;
+
 - (void)handleNotificationSettingsWithAuthorizationOptions:(NSNumber *)authorizationOptionsObject
 {
     UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
@@ -693,6 +700,10 @@
                                             waitUntilDone:NO];
                     }
                 }];
+                 if (hasPermissionCommand) {
+                    notificationDialogHandle = true;
+                    [self hasPermission:hasPermissionCommand];
+                }
                 break;
             }
             case UNAuthorizationStatusAuthorized:
@@ -700,9 +711,18 @@
                 [self performSelectorOnMainThread:@selector(registerForRemoteNotifications)
                                        withObject:nil
                                     waitUntilDone:NO];
+                    if (hasPermissionCommand) {
+                      notificationDialogHandle = true;
+                    [self hasPermission:hasPermissionCommand];
+                }
                 break;
             }
-            case UNAuthorizationStatusDenied:
+            case UNAuthorizationStatusDenied: {
+               if (hasPermissionCommand) {
+                    notificationDialogHandle = true;
+                    [self hasPermission:hasPermissionCommand];
+                }
+            }
             default:
                 break;
         }
